@@ -3,53 +3,31 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 use App\Models\Order;
 use Illuminate\Support\Carbon;
+use App\Services\ApiClient;
 
 class FetchOrders extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'fetch:orders {accountId}';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Fetch orders data from external API and store in database';
 
-    /**
-     * Create a new command instance.
-     *
-     * @return void
-     */
-    public function __construct()
+    public function __construct(private ApiClient $api)
     {
         parent::__construct();
     }
 
-    /**
-     * Execute the console command.
-     *
-     * @return int
-     */
     public function handle()
     {
         $accountId = (int)$this->argument('accountId');
 
-        $baseUrl = env('WB_API_URL') . '/orders';
-        $token = env('WB_API_KEY');
+        $baseUrl = rtrim(env('WB_API_URL'), '/') . '/orders';
+        $token   = env('WB_API_KEY');
 
-
-        // 1) Берём последнюю дату изменений для этого аккаунта
+        // 1) последняя дата изменений для этого аккаунта
         $lastDate = Order::where('account_id', $accountId)->max('last_change_date');
 
-        // 2) Если данных нет — берём "с запасом" за последние 30 дней
+        // 2) если нет данных — берём за последние 30 дней
         $dateFrom = $lastDate
             ? Carbon::parse($lastDate)->format('Y-m-d')
             : now()->subDays(30)->format('Y-m-d');
@@ -59,26 +37,26 @@ class FetchOrders extends Command
         $this->info("Orders: account={$accountId}, from={$dateFrom}, to={$dateTo}");
 
         $limit = 500;
-        $page = 1;
+        $page  = 1;
         $count = 0;
 
         do {
             $this->line("Запрашиваю страницу {$page}…");
 
-            $response = Http::get($baseUrl, [
+            $response = $this->api->get($baseUrl, [
                 'dateFrom' => $dateFrom,
-                'dateTo' => $dateTo,
-                'limit' => $limit,
-                'page' => $page,
-                'key' => $token,
+                'dateTo'   => $dateTo,
+                'limit'    => $limit,
+                'page'     => $page,
+                'key'      => $token,
             ]);
 
             if (!$response->successful()) {
-                $this->error("Ошибка запроса: " . $response->status());
+                $this->error("HTTP " . $response->status());
                 return 1;
             }
 
-            $data = $response->json();
+            $data  = $response->json();
             $items = $data['data'] ?? [];
 
             foreach ($items as $item) {
@@ -99,7 +77,7 @@ class FetchOrders extends Command
                         'warehouse_name'   => $item['warehouse_name'],
                         'oblast'           => $item['oblast'],
                         'income_id'        => $item['income_id'],
-                        'odid'             => $item['odid'], // не уникален сам по себе
+                        'odid'             => $item['odid'],
                         'subject'          => $item['subject'],
                         'category'         => $item['category'],
                         'brand'            => $item['brand'],
@@ -107,7 +85,6 @@ class FetchOrders extends Command
                         'cancel_dt'        => $item['cancel_dt'],
                     ]
                 );
-
                 $count++;
             }
 

@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 use App\Models\Income;
 use Illuminate\Support\Carbon;
+use App\Services\ApiClient;
 
 class FetchIncomes extends Command
 {
@@ -23,27 +23,17 @@ class FetchIncomes extends Command
      */
     protected $description = 'Fetch incomes data from external API and store in database';
 
-    /**
-     * Create a new command instance.
-     *
-     * @return void
-     */
-    public function __construct()
+    public function __construct(private ApiClient $api)
     {
         parent::__construct();
     }
 
-    /**
-     * Execute the console command.
-     *
-     * @return int
-     */
     public function handle()
     {
         $accountId = (int)$this->argument('accountId');
 
-        $baseUrl = env('WB_API_URL') . '/incomes';
-        $token = env('WB_API_KEY');
+        $baseUrl = rtrim(env('WB_API_URL'), '/') . '/incomes';
+        $token   = env('WB_API_KEY');
 
         // 1) Берём последнюю дату изменений для этого аккаунта
         $lastDate = Income::where('account_id', $accountId)->max('last_change_date');
@@ -58,26 +48,26 @@ class FetchIncomes extends Command
         $this->info("Incomes: account={$accountId}, from={$dateFrom}, to={$dateTo}");
 
         $limit = 500;
-        $page = 1;
+        $page  = 1;
         $count = 0;
 
         do {
             $this->line("Запрашиваю страницу {$page}…");
 
-            $response = Http::timeout(20)->get($baseUrl, [
+            $response = $this->api->get($baseUrl, [
                 'dateFrom' => $dateFrom,
-                'dateTo' => $dateTo,
-                'limit' => $limit,
-                'page' => $page,
-                'key' => $token,
+                'dateTo'   => $dateTo,
+                'limit'    => $limit,
+                'page'     => $page,
+                'key'      => $token,
             ]);
 
             if (!$response->successful()) {
-            $this->error("Ошибка запроса: HTTP {$response->status()} {$response->body()}");
-            return 1;
+                $this->error("HTTP " . $response->status());
+                return 1;
             }
 
-            $data = $response->json();
+            $data  = $response->json();
             $items = $data['data'] ?? [];
 
             foreach ($items as $item) {
