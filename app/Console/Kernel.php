@@ -16,14 +16,10 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         // $schedule->command('inspire')->hourly();
-        // запуск 2 раза в день по Москве: 09:00 и 21:00
+        // Временно: каждые 5 минут
         $schedule->command('update:data')
             ->timezone('Europe/Moscow')
-            ->dailyAt('09:00');
-
-        $schedule->command('update:data')
-            ->timezone('Europe/Moscow')
-            ->dailyAt('21:00');
+            ->everyFiveMinutes();
     }
 
     /**
