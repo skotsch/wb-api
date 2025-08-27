@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Sale extends Model
 {
     protected $fillable = [
+        'account_id',
         'g_number',
         'date',
         'last_change_date',
@@ -35,4 +36,9 @@ class Sale extends Model
         'brand',
         'is_storno',
     ];
+
+    public function account()
+    {
+        return $this->belongsTo(Account::class);
+    }
 }

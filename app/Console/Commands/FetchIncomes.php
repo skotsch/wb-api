@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use App\Models\Income;
+use Illuminate\Support\Carbon;
 
 class FetchIncomes extends Command
 {
@@ -13,7 +14,7 @@ class FetchIncomes extends Command
      *
      * @var string
      */
-    protected $signature = 'fetch:incomes';
+    protected $signature = 'fetch:incomes {accountId}';
 
     /**
      * The console command description.
@@ -39,19 +40,31 @@ class FetchIncomes extends Command
      */
     public function handle()
     {
+        $accountId = (int)$this->argument('accountId');
+
         $baseUrl = env('WB_API_URL') . '/incomes';
         $token = env('WB_API_KEY');
 
-        $dateFrom = '2024-08-01';
-        $dateTo = '2025-07-31';
+        // 1) Берём последнюю дату изменений для этого аккаунта
+        $lastDate = Income::where('account_id', $accountId)->max('last_change_date');
+
+        // 2) Если данных нет — берём "с запасом" за последние 30 дней
+        $dateFrom = $lastDate
+            ? Carbon::parse($lastDate)->format('Y-m-d')
+            : now()->subDays(30)->format('Y-m-d');
+
+        $dateTo = now()->format('Y-m-d');
+
+        $this->info("Incomes: account={$accountId}, from={$dateFrom}, to={$dateTo}");
+
         $limit = 500;
         $page = 1;
         $count = 0;
 
         do {
-            $this->info("Fetching incomes page $page...");
+            $this->line("Запрашиваю страницу {$page}…");
 
-            $response = Http::get($baseUrl, [
+            $response = Http::timeout(20)->get($baseUrl, [
                 'dateFrom' => $dateFrom,
                 'dateTo' => $dateTo,
                 'limit' => $limit,
@@ -60,35 +73,40 @@ class FetchIncomes extends Command
             ]);
 
             if (!$response->successful()) {
-                $this->error("Ошибка запроса: " . $response->status());
-                return 1;
+            $this->error("Ошибка запроса: HTTP {$response->status()} {$response->body()}");
+            return 1;
             }
 
             $data = $response->json();
             $items = $data['data'] ?? [];
 
             foreach ($items as $item) {
-                Income::create([
-                    'income_id' => $item['income_id'],
-                    'number' => $item['number'],
-                    'date' => $item['date'],
-                    'last_change_date' => $item['last_change_date'],
-                    'supplier_article' => $item['supplier_article'],
-                    'tech_size' => $item['tech_size'],
-                    'barcode' => $item['barcode'],
-                    'quantity' => $item['quantity'],
-                    'total_price' => $item['total_price'],
-                    'date_close' => $item['date_close'],
-                    'warehouse_name' => $item['warehouse_name'],
-                    'nm_id' => $item['nm_id'],
-                ]);
+                Income::updateOrCreate(
+                    [
+                        'account_id' => $accountId,
+                        'income_id'  => $item['income_id'],
+                        'nm_id'      => $item['nm_id'],
+                        'barcode'    => $item['barcode'],
+                        'tech_size'  => $item['tech_size'],
+                    ],
+                    [
+                        'number'           => $item['number'],
+                        'date'             => $item['date'],
+                        'last_change_date' => $item['last_change_date'],
+                        'supplier_article' => $item['supplier_article'],
+                        'quantity'         => $item['quantity'],
+                        'total_price'      => $item['total_price'],
+                        'date_close'       => $item['date_close'],
+                        'warehouse_name'   => $item['warehouse_name'],
+                    ]
+                );
                 $count++;
             }
 
             $page++;
         } while ($page <= ($data['meta']['last_page'] ?? $page));
 
-        $this->info("Загрузка завершена. Загружено $count записей.");
+        $this->info("Загрузка завершена. Загружено {$count} записей.");
         return 0;
     }
 }

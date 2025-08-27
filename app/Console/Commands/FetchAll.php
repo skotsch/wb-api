@@ -11,7 +11,7 @@ class FetchAll extends Command
      *
      * @var string
      */
-    protected $signature = 'fetch:all';
+    protected $signature = 'fetch:all {accountId}';
 
     /**
      * The console command description.
@@ -37,18 +37,21 @@ class FetchAll extends Command
      */
     public function handle()
     {
-        $this->info('1. Запуск fetch:sales');
-        $this->call('fetch:sales');
+        $accountId = (int)$this->argument('accountId');
 
-        $this->info('2. Запуск fetch:orders');
-        $this->call('fetch:orders');
+        $this->info("1. Запуск fetch:sales для account={$accountId}");
+        $this->call('fetch:sales', ['accountId' => $accountId]);
 
-        $this->info('3. Запуск fetch:stocks');
-        $this->call('fetch:stocks');
+        $this->info("2. Запуск fetch:orders для account={$accountId}");
+        $this->call('fetch:orders', ['accountId' => $accountId]);
 
-        $this->info('4. Запуск fetch:incomes');
-        $this->call('fetch:incomes');
+        $this->info("3. Запуск fetch:stocks для account={$accountId}");
+        $this->call('fetch:stocks', ['accountId' => $accountId]);
+
+        $this->info("4. Запуск fetch:incomes для account={$accountId}");
+        $this->call('fetch:incomes', ['accountId' => $accountId]);
 
         $this->info('Все данные загружены!');
-        return 0;    }
+        return 0;
+    }
 }

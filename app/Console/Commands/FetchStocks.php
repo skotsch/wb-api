@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use App\Models\Stock;
+use Illuminate\Support\Carbon;
 
 class FetchStocks extends Command
 {
@@ -13,7 +14,7 @@ class FetchStocks extends Command
      *
      * @var string
      */
-    protected $signature = 'fetch:stocks';
+    protected $signature = 'fetch:stocks {accountId}';
 
     /**
      * The console command description.
@@ -39,10 +40,17 @@ class FetchStocks extends Command
      */
     public function handle()
     {
+        $accountId = (int)$this->argument('accountId');
+        
         $baseUrl = env('WB_API_URL') . '/stocks';
         $token = env('WB_API_KEY');
+        
+        $lastDate = Stock::where('account_id', $accountId)->max('date');
+        $dateFrom = $lastDate
+            ? Carbon::parse($lastDate)->format('Y-m-d')
+            : now()->format('Y-m-d');
 
-        $dateFrom = now()->format('Y-m-d'); // текущий день
+        $this->info("Stocks: account={$accountId}, dateFrom={$dateFrom}");
         $limit = 500;
         $page = 1;
         $count = 0;
@@ -66,27 +74,32 @@ class FetchStocks extends Command
             $items = $data['data'] ?? [];
 
             foreach ($items as $item) {
-                Stock::create([
-                    'date' => $item['date'],
-                    'last_change_date' => $item['last_change_date'],
-                    'supplier_article' => $item['supplier_article'],
-                    'tech_size' => $item['tech_size'],
-                    'barcode' => $item['barcode'],
-                    'quantity' => $item['quantity'],
-                    'quantity_full' => $item['quantity_full'],
-                    'is_supply' => $item['is_supply'],
-                    'is_realization' => $item['is_realization'],
-                    'warehouse_name' => $item['warehouse_name'],
-                    'in_way_to_client' => $item['in_way_to_client'],
-                    'in_way_from_client' => $item['in_way_from_client'],
-                    'nm_id' => $item['nm_id'],
-                    'subject' => $item['subject'],
-                    'category' => $item['category'],
-                    'brand' => $item['brand'],
-                    'sc_code' => $item['sc_code'],
-                    'price' => $item['price'],
-                    'discount' => $item['discount'],
-                ]);
+                Stock::updateOrCreate(
+                    [
+                        'account_id' => $accountId,
+                        'date'       => $item['date'],
+                        'nm_id'      => $item['nm_id'],
+                        'barcode'    => $item['barcode'],
+                        'warehouse_name' => $item['warehouse_name'],
+                        'tech_size'  => $item['tech_size'],
+                    ],
+                    [
+                        'last_change_date' => $item['last_change_date'],
+                        'supplier_article' => $item['supplier_article'],
+                        'quantity'         => $item['quantity'],
+                        'quantity_full'    => $item['quantity_full'],
+                        'is_supply'        => $item['is_supply'],
+                        'is_realization'   => $item['is_realization'],
+                        'in_way_to_client' => $item['in_way_to_client'],
+                        'in_way_from_client' => $item['in_way_from_client'],
+                        'subject'          => $item['subject'],
+                        'category'         => $item['category'],
+                        'brand'            => $item['brand'],
+                        'sc_code'          => $item['sc_code'],
+                        'price'            => $item['price'],
+                        'discount'         => $item['discount'],
+                    ]
+                );
                 $count++;
             }
 

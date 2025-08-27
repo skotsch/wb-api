@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Income extends Model
 {
     protected $fillable = [
+        'account_id',
         'income_id',
         'number',
         'date',
@@ -20,4 +21,9 @@ class Income extends Model
         'warehouse_name',
         'nm_id',
     ];
+    
+    public function account()
+    {
+        return $this->belongsTo(Account::class);
+    }
 }

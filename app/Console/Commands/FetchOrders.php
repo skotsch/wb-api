@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use App\Models\Order;
+use Illuminate\Support\Carbon;
 
 class FetchOrders extends Command
 {
@@ -13,7 +14,7 @@ class FetchOrders extends Command
      *
      * @var string
      */
-    protected $signature = 'fetch:orders';
+    protected $signature = 'fetch:orders {accountId}';
 
     /**
      * The console command description.
@@ -39,17 +40,30 @@ class FetchOrders extends Command
      */
     public function handle()
     {
+        $accountId = (int)$this->argument('accountId');
+
         $baseUrl = env('WB_API_URL') . '/orders';
         $token = env('WB_API_KEY');
 
-        $dateFrom = '2025-08-01';
+
+        // 1) Берём последнюю дату изменений для этого аккаунта
+        $lastDate = Order::where('account_id', $accountId)->max('last_change_date');
+
+        // 2) Если данных нет — берём "с запасом" за последние 30 дней
+        $dateFrom = $lastDate
+            ? Carbon::parse($lastDate)->format('Y-m-d')
+            : now()->subDays(30)->format('Y-m-d');
+
         $dateTo = now()->format('Y-m-d');
+
+        $this->info("Orders: account={$accountId}, from={$dateFrom}, to={$dateTo}");
+
         $limit = 500;
         $page = 1;
         $count = 0;
 
         do {
-            $this->info("Fetching page $page...");
+            $this->line("Запрашиваю страницу {$page}…");
 
             $response = Http::get($baseUrl, [
                 'dateFrom' => $dateFrom,
@@ -68,33 +82,39 @@ class FetchOrders extends Command
             $items = $data['data'] ?? [];
 
             foreach ($items as $item) {
-                Order::create([
-                    'g_number' => $item['g_number'],
-                    'date' => $item['date'],
-                    'last_change_date' => $item['last_change_date'],
-                    'supplier_article' => $item['supplier_article'],
-                    'tech_size' => $item['tech_size'],
-                    'barcode' => $item['barcode'],
-                    'total_price' => $item['total_price'],
-                    'discount_percent' => $item['discount_percent'],
-                    'warehouse_name' => $item['warehouse_name'],
-                    'oblast' => $item['oblast'],
-                    'income_id' => $item['income_id'],
-                    'odid' => $item['odid'],
-                    'nm_id' => $item['nm_id'],
-                    'subject' => $item['subject'],
-                    'category' => $item['category'],
-                    'brand' => $item['brand'],
-                    'is_cancel' => $item['is_cancel'],
-                    'cancel_dt' => $item['cancel_dt'],
-                ]);
+                Order::updateOrCreate(
+                    [
+                        'account_id' => $accountId,
+                        'g_number'   => $item['g_number'],
+                        'nm_id'      => $item['nm_id'],
+                        'barcode'    => $item['barcode'],
+                        'tech_size'  => $item['tech_size'],
+                    ],
+                    [
+                        'date'             => $item['date'],
+                        'last_change_date' => $item['last_change_date'],
+                        'supplier_article' => $item['supplier_article'],
+                        'total_price'      => $item['total_price'],
+                        'discount_percent' => $item['discount_percent'],
+                        'warehouse_name'   => $item['warehouse_name'],
+                        'oblast'           => $item['oblast'],
+                        'income_id'        => $item['income_id'],
+                        'odid'             => $item['odid'], // не уникален сам по себе
+                        'subject'          => $item['subject'],
+                        'category'         => $item['category'],
+                        'brand'            => $item['brand'],
+                        'is_cancel'        => $item['is_cancel'],
+                        'cancel_dt'        => $item['cancel_dt'],
+                    ]
+                );
+
                 $count++;
             }
 
             $page++;
         } while ($page <= ($data['meta']['last_page'] ?? $page));
 
-        $this->info("Загрузка завершена. Загружено $count записей.");
+        $this->info("Загрузка завершена. Загружено {$count} записей.");
         return 0;
     }
 }
