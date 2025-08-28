@@ -4,15 +4,20 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Order;
+use App\Models\ApiService;
 use Illuminate\Support\Carbon;
 use App\Services\ApiClient;
+use App\Services\TokenResolver;
 
 class FetchOrders extends Command
 {
-    protected $signature = 'fetch:orders {accountId}';
+    protected $signature = 'fetch:orders {accountId} {service}';
     protected $description = 'Fetch orders data from external API and store in database';
 
-    public function __construct(private ApiClient $api)
+    public function __construct(
+        private ApiClient $api, 
+        private TokenResolver $tokens
+        )
     {
         parent::__construct();
     }
@@ -20,14 +25,27 @@ class FetchOrders extends Command
     public function handle()
     {
         $accountId = (int)$this->argument('accountId');
+        $serviceCode = (string)$this->argument('service');
 
-        $baseUrl = rtrim(env('WB_API_URL'), '/') . '/orders';
-        $token   = env('WB_API_KEY');
+        // Берём сервис из БД
+        $service = ApiService::where('code', $serviceCode)->first();
+        if (!$service || empty($service->base_url)) {
+            $this->error("API service '{$serviceCode}' не найден или не задан base_url в БД.");
+            return 1;
+        }
 
-        // 1) последняя дата изменений для этого аккаунта
+        $baseUrl = rtrim($service->base_url, '/') . '/orders';
+        // Берём токен из БД по account_id + serviceCode + token_type=api_key
+        $token = $this->tokens->getApiKeyForAccount($accountId, $serviceCode);
+        if (!$token) {
+            $this->error("Нет активного api_key для account={$accountId}, service={$serviceCode}.");
+            return 1;
+        }
+
+        // Последняя дата изменений для этого аккаунта
         $lastDate = Order::where('account_id', $accountId)->max('last_change_date');
 
-        // 2) если нет данных — берём за последние 30 дней
+        // Если нет данных — берём за последние 30 дней
         $dateFrom = $lastDate
             ? Carbon::parse($lastDate)->format('Y-m-d')
             : now()->subDays(30)->format('Y-m-d');
@@ -52,7 +70,7 @@ class FetchOrders extends Command
             ]);
 
             if (!$response->successful()) {
-                $this->error("HTTP " . $response->status());
+                $this->error("HTTP " . $response->status() . " BODY: " . $response->body());
                 return 1;
             }
 
@@ -87,7 +105,6 @@ class FetchOrders extends Command
                 );
                 $count++;
             }
-
             $page++;
         } while ($page <= ($data['meta']['last_page'] ?? $page));
 

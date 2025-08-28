@@ -4,15 +4,20 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Stock;
+use App\Models\ApiService;
 use Illuminate\Support\Carbon;
 use App\Services\ApiClient;
+use App\Services\TokenResolver;
 
 class FetchStocks extends Command
 {
-    protected $signature = 'fetch:stocks {accountId}';
+    protected $signature = 'fetch:stocks {accountId} {service}';
     protected $description = 'Fetch stock data from external API and store in database';
 
-    public function __construct(private ApiClient $api)
+    public function __construct(
+        private ApiClient $api, 
+        private TokenResolver $tokens
+        )
     {
         parent::__construct();
     }
@@ -20,9 +25,23 @@ class FetchStocks extends Command
     public function handle()
     {
         $accountId = (int)$this->argument('accountId');
+        $serviceCode = (string)$this->argument('service');
 
-        $baseUrl = rtrim(env('WB_API_URL'), '/') . '/stocks';
-        $token   = env('WB_API_KEY');
+        // Берём сервис из БД
+        $service = ApiService::where('code', $serviceCode)->first();
+        if (!$service || empty($service->base_url)) {
+            $this->error("API service '{$serviceCode}' не найден или не задан base_url в БД.");
+            return 1;
+        }
+
+        $baseUrl = rtrim($service->base_url, '/') . '/stocks';
+
+        // Берём токен из БД по account_id + serviceCode + token_type=api_key
+        $token = $this->tokens->getApiKeyForAccount($accountId, $serviceCode);
+        if (!$token) {
+            $this->error("Нет активного api_key для account={$accountId}, service={$serviceCode}.");
+            return 1;
+        }
 
         // Берём последнюю "срезовую" дату для аккаунта; если нет — сегодня
         $lastDate = Stock::where('account_id', $accountId)->max('date');
@@ -47,7 +66,7 @@ class FetchStocks extends Command
             ]);
 
             if (!$response->successful()) {
-                $this->error("HTTP " . $response->status());
+                $this->error("HTTP " . $response->status() . " BODY: " . $response->body());
                 return 1;
             }
 
@@ -83,7 +102,6 @@ class FetchStocks extends Command
                 );
                 $count++;
             }
-
             $page++;
         } while ($page <= ($data['meta']['last_page'] ?? $page));
 
