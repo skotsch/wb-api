@@ -4,8 +4,10 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Income;
+use App\Models\ApiService;
 use Illuminate\Support\Carbon;
 use App\Services\ApiClient;
+use App\Services\TokenResolver;
 
 class FetchIncomes extends Command
 {
@@ -14,7 +16,7 @@ class FetchIncomes extends Command
      *
      * @var string
      */
-    protected $signature = 'fetch:incomes {accountId}';
+    protected $signature = 'fetch:incomes {accountId} {service}';
 
     /**
      * The console command description.
@@ -23,7 +25,10 @@ class FetchIncomes extends Command
      */
     protected $description = 'Fetch incomes data from external API and store in database';
 
-    public function __construct(private ApiClient $api)
+    public function __construct(
+        private ApiClient $api, 
+        private TokenResolver $tokens
+        )
     {
         parent::__construct();
     }
@@ -31,14 +36,28 @@ class FetchIncomes extends Command
     public function handle()
     {
         $accountId = (int)$this->argument('accountId');
+        $serviceCode = (string)$this->argument('service');
+        
+        // Берём сервис из БД
+        $service = ApiService::where('code', $serviceCode)->first();
+        if (!$service || empty($service->base_url)) {
+            $this->error("API service '{$serviceCode}' не найден или не задан base_url в БД.");
+            return 1;
+        }
 
-        $baseUrl = rtrim(env('WB_API_URL'), '/') . '/incomes';
-        $token   = env('WB_API_KEY');
+        $baseUrl = rtrim($service->base_url, '/') . '/incomes';
 
-        // 1) Берём последнюю дату изменений для этого аккаунта
+        // Берём токен из БД по account_id + serviceCode + token_type=api_key
+        $token = $this->tokens->getApiKeyForAccount($accountId, $serviceCode);
+        if (!$token) {
+            $this->error("Нет активного api_key для account={$accountId}, service={$serviceCode}.");
+            return 1;
+        }
+
+        // Берём последнюю дату изменений для этого аккаунта
         $lastDate = Income::where('account_id', $accountId)->max('last_change_date');
 
-        // 2) Если данных нет — берём "с запасом" за последние 30 дней
+        // Если данных нет — берём "с запасом" за последние 30 дней
         $dateFrom = $lastDate
             ? Carbon::parse($lastDate)->format('Y-m-d')
             : now()->subDays(30)->format('Y-m-d');
