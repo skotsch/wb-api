@@ -4,11 +4,18 @@
 
 ## Возможности
 
-- Загрузка продаж (`sales`)
-- Заказов (`orders`)
-- Остатков на складах (`stocks`)
-- Поставок (`incomes`)
-- Команда `fetch:all` — запуск всех парсеров сразу
+- Загрузка данных:
+  - Продажи (fetch:sales)
+  - Заказы (fetch:orders)
+  - Остатки на складах (fetch:stocks)
+  - Приходы (fetch:incomes)
+- Команда fetch:all — последовательный запуск всех парсеров
+- Поддержка нескольких компаний и аккаунтов
+- Гибкая работа с API-сервисами и токенами:
+  - Поддержка разных типов токенов
+  - Хранение токенов в БД
+- Artisan-команды для удобного управления сущностями (company, account, api_service, token_type, api_token)
+- Автоматическое обновление данных дважды в день через Laravel Scheduler
 
 ## Установка
 
@@ -20,22 +27,30 @@ cp .env.example .env
 ./vendor/bin/sail artisan migrate
 ```
 
-## Переменные окружения
-
-В `.env` нужно указать:
-
-```env
-WB_API_KEY=your_token_here
-WB_API_BASE_URL=http://your-api-url/api
-```
-
-Пример `.env.example` уже добавлен.
-
 ## Использование
 
-Запуск одной команды:
+Создание сущностей через artisan:
 ```bash
-./vendor/bin/sail artisan fetch:sales
+# Добавить компанию
+./vendor/bin/sail artisan make:company "Test Company"
+
+# Добавить аккаунт для компании
+./vendor/bin/sail artisan make:account 1 "Main Account"
+
+# Добавить API-сервис (например, Wildberries)
+./vendor/bin/sail artisan make:api-service wb "Wildberries API" http://your-api-url/api
+
+# Добавить тип токена
+./vendor/bin/sail artisan make:token-type api_key "Standard API Key"
+
+# Добавить токен для аккаунта
+./vendor/bin/sail artisan make:api-token 1 wb api_key your_token_here
+```
+
+Пример запуска по одной команде:
+```bash
+# Продажи для account=1 и сервиса wb
+./vendor/bin/sail artisan fetch:sales 1 wb
 ./vendor/bin/sail artisan fetch:incomes
 ./vendor/bin/sail artisan fetch:stocks
 ./vendor/bin/sail artisan fetch:orders
@@ -43,53 +58,43 @@ WB_API_BASE_URL=http://your-api-url/api
 
 Или всех сразу:
 ```bash
-./vendor/bin/sail artisan fetch:all
+./vendor/bin/sail artisan fetch:all 1 wb
 ```
 
-## Доступы к удалённой MySQL
+## Автоматическое обновление
 
-Хостинг: Aiven (Free Plan)
-Для проверки работоспособности парсера база уже заполнена.
-
+Данные обновляются 2 раза в день (09:00 и 21:00 по Москве).
+Для ручного запуска планировщика:
 ```bash
-Host: mysql-36d6eaff-wb-api.h.aivencloud.com
-Port: 22434
-User: avnadmin
-Password: will be provided separately
-Database: defaultdb
-SSL mode: REQUIRED
-CA certificate: ./certs/ca.pem
+./vendor/bin/sail artisan schedule:run
 ```
-Важно: подключение возможно только с использованием SSL.
-Файл сертификата ca.pem находится в папке certs проекта или может быть скачан с Aiven. Срок действия доступа: до 2025-08-14, далее пароль будет ротирован
- 
+Подключение автообновления через cron:
+Шаги
+
+Открыть редактор crontab:
+```bash
+crontab -e
+```
+
+Добавить строку (заменить путь к проекту на свой):
+```bash
+* * * * * cd /home/skotsch/Projects/wb-api && ./vendor/bin/sail artisan schedule:run >> /tmp/laravel-schedule.log 2>&1
+```
+
+Сохранить. Готово.
+Cron каждую минуту запускает планировщик; Laravel сам сработает ровно в 09:00 и 21:00 по МСК
+
 ## Список таблиц
 
+- `companies` — компании
+- `accounts` — аккаунты компаний
+- `api_services` — API-сервисы
+- `token_types` — типы токенов
+- `api_tokens` — токены для аккаунтов
 - `sales` — данные о продажах
 - `orders` — данные о заказах
 - `stocks` — остатки на складах
 - `incomes` — данные о приходах
-
-## Подключение через MySQL CLI
-
-```bash
-mysql \
-  --host=mysql-36d6eaff-wb-api.h.aivencloud.com \
-  --port=22434 \
-  --user=avnadmin \
-  --password=will be provided separately \
-  --ssl-ca=./certs/ca.pem \
-  defaultdb
-```
-
-## Подключение через DBeaver / MySQL Workbench
-
-1. Создайте новое соединение MySQL.
-2. Укажите хост, порт, пользователя и пароль (см. выше).
-3. Перейдите в настройки SSL и выберите:
-    - SSL mode: `REQUIRED`
-    - CA certificate: путь до `ca.pem`
-4. Сохраните и подключитесь.
 
 ## Технологии
 
