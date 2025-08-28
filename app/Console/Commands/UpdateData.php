@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Account;
+use App\Models\ApiService;
 
 class UpdateData extends Command
 {
@@ -19,7 +20,7 @@ class UpdateData extends Command
      *
      * @var string
      */
-    protected $description = 'Fetch all datasets twice a day for all accounts';
+    protected $description = 'Fetch all datasets for all accounts and all services that have active tokens twice a day for all accounts';
 
     /**
      * Create a new command instance.
@@ -45,12 +46,35 @@ class UpdateData extends Command
             return 0;
         }
 
+        $ok = 0; $fail = 0;
+
         foreach ($accounts as $accountId) {
-            $this->info("=== Account #{$accountId} ===");
-            $this->call('fetch:all', ['accountId' => $accountId]);
+            // все сервисы, по которым у аккаунта есть активные токены
+            $serviceCodes = ApiService::query()
+                ->select('api_services.code')
+                ->join('api_tokens', 'api_tokens.api_service_id', '=', 'api_services.id')
+                ->where('api_tokens.account_id', $accountId)
+                ->where('api_tokens.is_active', true)
+                ->distinct()
+                ->pluck('code');
+
+            if ($serviceCodes->isEmpty()) {
+                $this->warn("Account #{$accountId}: нет активных токенов — пропуск.");
+                continue;
+            }
+
+            foreach ($serviceCodes as $serviceCode) {
+                $this->info("=== Account #{$accountId}, service={$serviceCode} ===");
+                $code = $this->call('fetch:all', [
+                    'accountId' => $accountId,
+                    'service'   => $serviceCode,
+                ]);
+
+                if ($code === 0) { $ok++; } else { $fail++; }
+            }
         }
 
-        $this->info('UpdateData завершён для всех аккаунтов.');
-        return 0;
+        $this->info("UpdateData завершён. OK={$ok}, FAIL={$fail}");
+        return $fail > 0 ? 1 : 0;
     }
 }
