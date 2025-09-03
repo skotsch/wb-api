@@ -17,6 +17,11 @@ class CreateStocksTable extends Migration
             $table->id();
             $table->timestamps();
 
+            // Привязка к аккаунту
+            $table->foreignId('account_id')
+                  ->constrained('accounts')
+                  ->cascadeOnDelete();
+
             $table->date('date');
             $table->date('last_change_date')->nullable();
 
@@ -41,6 +46,11 @@ class CreateStocksTable extends Migration
             $table->bigInteger('sc_code')->nullable();
             $table->integer('price')->nullable();
             $table->unsignedTinyInteger('discount')->nullable();
+
+            $table->unique(
+                ['account_id','date','nm_id','tech_size','warehouse_name','sc_code','is_supply','is_realization','quantity_full'],
+                'stocks_acc_date_nmid_size_wh_sc_flags_qfull_unique'
+            );
         });
     }
 

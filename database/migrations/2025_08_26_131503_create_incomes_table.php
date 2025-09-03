@@ -17,6 +17,12 @@ class CreateIncomesTable extends Migration
             $table->id();
             $table->timestamps();
 
+            // Привязка к аккаунту
+            $table->foreignId('account_id')
+                  ->constrained('accounts')
+                  ->cascadeOnDelete();
+
+
             $table->bigInteger('income_id')->index(); // может повторяться
             $table->string('number', 50)->nullable(); // часто пустой
             $table->date('date');
@@ -30,6 +36,11 @@ class CreateIncomesTable extends Migration
             $table->date('date_close');
             $table->string('warehouse_name', 100);
             $table->bigInteger('nm_id');
+            
+            $table->unique(
+                ['account_id','income_id','nm_id','barcode','tech_size'],
+                'incomes_acc_income_nm_bc_ts_unique'
+            );
         });
     }
 

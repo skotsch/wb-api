@@ -43,11 +43,8 @@ class FetchStocks extends Command
             return 1;
         }
 
-        // Берём последнюю "срезовую" дату для аккаунта; если нет — сегодня
-        $lastDate = Stock::where('account_id', $accountId)->max('date');
-        $dateFrom = $lastDate
-            ? Carbon::parse($lastDate)->format('Y-m-d')
-            : now()->format('Y-m-d');
+        // Берём сегодняшнюю дату
+        $dateFrom = now()->format('Y-m-d');
 
         $this->info("Stocks: account={$accountId}, dateFrom={$dateFrom}");
 
@@ -75,29 +72,31 @@ class FetchStocks extends Command
 
             foreach ($items as $item) {
                 Stock::updateOrCreate(
-                    [
+                     [
                         'account_id'     => $accountId,
                         'date'           => $item['date'],
                         'nm_id'          => $item['nm_id'],
-                        'barcode'        => $item['barcode'],
-                        'warehouse_name' => $item['warehouse_name'],
                         'tech_size'      => $item['tech_size'],
+                        'warehouse_name' => $item['warehouse_name'],
+                        'sc_code'        => $item['sc_code'],
+                        'is_supply'      => $item['is_supply'],
+                        'is_realization' => $item['is_realization'],
+                        'quantity_full'  => $item['quantity_full'],
                     ],
                     [
-                        'last_change_date'  => $item['last_change_date'],
-                        'supplier_article'  => $item['supplier_article'],
-                        'quantity'          => $item['quantity'],
-                        'quantity_full'     => $item['quantity_full'],
-                        'is_supply'         => $item['is_supply'],
-                        'is_realization'    => $item['is_realization'],
-                        'in_way_to_client'  => $item['in_way_to_client'],
-                        'in_way_from_client'=> $item['in_way_from_client'],
-                        'subject'           => $item['subject'],
-                        'category'          => $item['category'],
-                        'brand'             => $item['brand'],
-                        'sc_code'           => $item['sc_code'],
-                        'price'             => $item['price'],
-                        'discount'          => $item['discount'],
+                        'last_change_date'   => $item['last_change_date'],
+                        'supplier_article'   => $item['supplier_article'],
+                        'barcode'            => $item['barcode'],
+
+                        'quantity'           => $item['quantity'],
+                        'in_way_to_client'   => $item['in_way_to_client'],
+                        'in_way_from_client' => $item['in_way_from_client'],
+
+                        'subject'            => $item['subject'],
+                        'category'           => $item['category'],
+                        'brand'              => $item['brand'],
+                        'price'              => $item['price'],
+                        'discount'           => $item['discount'],
                     ]
                 );
                 $count++;

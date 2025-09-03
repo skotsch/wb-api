@@ -17,6 +17,11 @@ class CreateOrdersTable extends Migration
             $table->id();
             $table->timestamps();
 
+             // Привязка к аккаунту
+            $table->foreignId('account_id')
+                  ->constrained('accounts')
+                  ->cascadeOnDelete();
+
             $table->string('g_number', 50)->index();
             $table->dateTime('date');
             $table->date('last_change_date');
@@ -29,7 +34,7 @@ class CreateOrdersTable extends Migration
             $table->string('warehouse_name', 100);
             $table->string('oblast', 100);
             $table->bigInteger('income_id');
-            $table->string('odid', 50); // приходит как строка "0", лучше string
+            $table->string('odid', 50); // приходит как строка "0"
             $table->bigInteger('nm_id');
 
             $table->string('subject', 100);
@@ -38,6 +43,11 @@ class CreateOrdersTable extends Migration
 
             $table->boolean('is_cancel');
             $table->date('cancel_dt')->nullable();
+
+            $table->unique(
+                ['account_id', 'g_number', 'barcode', 'income_id'],
+                'orders_acc_gnum_bc_income_unique'
+            );
         });
     }
 

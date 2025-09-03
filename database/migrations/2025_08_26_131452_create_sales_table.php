@@ -17,8 +17,13 @@ class CreateSalesTable extends Migration
             $table->id();
             $table->timestamps();
 
+            // Привязка к аккаунту
+            $table->foreignId('account_id')
+                  ->constrained('accounts')
+                  ->cascadeOnDelete();
+
             // Основные данные
-            $table->string('g_number', 50)->unique();
+            $table->string('g_number', 50);               
             $table->date('date');
             $table->date('last_change_date');
             $table->string('supplier_article', 50);
@@ -53,6 +58,8 @@ class CreateSalesTable extends Migration
             $table->string('category', 50);
             $table->string('brand', 50);
             $table->boolean('is_storno')->nullable();
+
+            $table->unique(['account_id', 'sale_id'], 'sales_account_saleid_unique');
         });
     }
 
