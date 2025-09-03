@@ -81,9 +81,10 @@ class FetchSales extends Command
                 Sale::updateOrCreate(
                     [
                         'account_id' => $accountId,
-                        'g_number'   => $item['g_number'],
+                        'sale_id'            => $item['sale_id'],
                     ],
                     [
+                        'g_number'            => $item['g_number'],
                         'date'               => $item['date'],
                         'last_change_date'   => $item['last_change_date'],
                         'supplier_article'   => $item['supplier_article'],
@@ -99,7 +100,6 @@ class FetchSales extends Command
                         'oblast_okrug_name'  => $item['oblast_okrug_name'],
                         'region_name'        => $item['region_name'],
                         'income_id'          => $item['income_id'],
-                        'sale_id'            => $item['sale_id'],
                         'odid'               => $item['odid'],
                         'spp'                => $item['spp'],
                         'for_pay'            => $item['for_pay'],
